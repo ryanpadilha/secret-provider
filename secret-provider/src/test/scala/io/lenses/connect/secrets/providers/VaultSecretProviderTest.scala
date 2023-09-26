@@ -178,6 +178,7 @@ class VaultSecretProviderTest extends AnyWordSpec with Matchers with BeforeAndAf
       VaultProviderConfig.AWS_REQUEST_HEADERS -> "headers",
       VaultProviderConfig.AWS_ROLE            -> "role",
       VaultProviderConfig.AWS_REQUEST_URL     -> "url",
+      VaultProviderConfig.AWS_IAM_SERVER_ID   -> "server",
     ).asJava
 
     val settings = VaultSettings(VaultProviderConfig(props))

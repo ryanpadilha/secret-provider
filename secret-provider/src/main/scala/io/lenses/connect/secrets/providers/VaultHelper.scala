@@ -20,6 +20,12 @@ import io.lenses.connect.secrets.io.FileWriter
 import io.lenses.connect.secrets.utils.EncodingAndId
 import io.lenses.connect.secrets.utils.ExceptionUtils.failWithEx
 import org.apache.kafka.connect.errors.ConnectException
+import play.api.libs.json.Json
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
+import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.sts.StsClient
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest
 
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -32,11 +38,7 @@ import scala.util.Try
 import software.amazon.awssdk.utils.BinaryUtils
 
 import java.util
-import software.amazon.awssdk.http.{SdkHttpFullRequest, SdkHttpMethod}
-
 import scala.jdk.CollectionConverters._
-import play.api.libs.json.Json
-
 
 class VaultHelper(
   vaultClient:        Vault,
@@ -111,6 +113,12 @@ object VaultHelper extends StrictLogging {
       s"Initializing client with mode [${settings.authMode.toString}]",
     )
 
+    config.token(getAuthToken(vault, settings).get)
+    config.build()
+    new Vault(config)
+  }
+
+  def getAuthToken(vault: Vault, settings: VaultSettings): Option[String] = {
     val token = settings.authMode match {
       case VaultAuthMethod.USERPASS =>
         settings.userPass
@@ -143,7 +151,7 @@ object VaultHelper extends StrictLogging {
                 aws.role,
                 aws.url,
                 aws.body.value(),
-                getDynamicHeaders(aws.iamServerId),
+                getDynamicHeaders(aws.iamServerId.getOrElse(settings.addr)),
                 aws.mount,
               )
               .getAuthClientToken,
@@ -202,24 +210,33 @@ object VaultHelper extends StrictLogging {
         )
     }
 
-    config.token(token.get)
-    config.build()
-    new Vault(config)
+    token
   }
 
   // request STS for header
-  private def getDynamicHeaders(serverId: Option[String]): String = {
+  private def getDynamicHeaders(serverId: String): String = {
     logger.info("invoke getDynamicHeaders")
 
-    val request = SdkHttpFullRequest.builder()
-      .protocol("https")
-      .method(SdkHttpMethod.POST)
-      .host("sts.amazonaws.com")
-      .putHeader("X-Vault-AWS-IAM-Server-ID", serverId.getOrElse(""))
-      .contentStreamProvider(() => new java.io.ByteArrayInputStream("{}".getBytes(StandardCharsets.UTF_8)))
+    val credentialsProvider = DefaultCredentialsProvider.create()
+    val client = StsClient.builder()
+      .region(Region.SA_EAST_1)
+      .credentialsProvider(credentialsProvider)
       .build()
 
-    val payload = Json.toJson(headersToMap(request.headers()).asScala).toString()
+    val param = new util.ArrayList[String]()
+    param.add(serverId)
+
+    val configuration = AwsRequestOverrideConfiguration.builder().build()
+    configuration.headers().put("X-Vault-AWS-IAM-Server-ID", param)
+
+    val request = GetCallerIdentityRequest.builder()
+      .overrideConfiguration(configuration)
+      .build()
+
+    val response = client.getCallerIdentity(request)
+    logger.info("aws getDynamicHeaders - headers :: %s".format(response.sdkHttpResponse().headers()))
+
+    val payload = Json.toJson(headersToMap(response.sdkHttpResponse().headers()).asScala).toString()
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
     logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
