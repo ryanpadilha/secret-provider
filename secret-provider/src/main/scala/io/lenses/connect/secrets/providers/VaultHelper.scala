@@ -21,9 +21,13 @@ import io.lenses.connect.secrets.utils.EncodingAndId
 import io.lenses.connect.secrets.utils.ExceptionUtils.failWithEx
 import org.apache.kafka.connect.errors.ConnectException
 import play.api.libs.json.Json
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
+import software.amazon.awssdk.auth.credentials.{AwsCredentials, AwsCredentialsProvider, DefaultCredentialsProvider}
+import software.amazon.awssdk.auth.signer.AwsSignerExecutionAttribute
+import software.amazon.awssdk.authcrt.signer.AwsCrtS3V4aSigner
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration
-import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.core.interceptor.ExecutionAttributes
+import software.amazon.awssdk.http.{SdkHttpFullRequest, SdkHttpMethod}
+import software.amazon.awssdk.regions.{Region, RegionScope}
 import software.amazon.awssdk.services.sts.StsClient
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest
 
@@ -214,6 +218,29 @@ object VaultHelper extends StrictLogging {
   }
 
   // request STS for header
+  private def getDynamicHeaderHttp(serverId: String): String = {
+    logger.info("invoke getDynamicHeadersHttp")
+
+    val request = SdkHttpFullRequest.builder()
+      .method(SdkHttpMethod.POST)
+      .encodedPath("/")
+      .port(443)
+      .protocol("https")
+      .host("sts.amazonaws.com")
+      .putHeader("X-Vault-AWS-IAM-Server-ID", new util.ArrayList[String](){ add(serverId) })
+      .putHeader("Content-Type", new util.ArrayList[String](){ add("application/x-www-form-urlencoded; charset=utf-8")  })
+      .build()
+
+    val ea = new ExecutionAttributes()
+    ea.putAttribute(AwsSignerExecutionAttribute.AWS_CREDENTIALS,  DefaultCredentialsProvider.create().resolveCredentials())
+    ea.putAttribute(AwsSignerExecutionAttribute.SERVICE_SIGNING_NAME, "GetCallerIdentity")
+
+    val signer = AwsCrtS3V4aSigner.builder.defaultRegionScope(RegionScope.GLOBAL).build()
+    val headers = signer.sign(request, ea).headers
+
+    ""
+  }
+
   private def getDynamicHeaders(serverId: String): String = {
     logger.info("invoke getDynamicHeaders")
 
@@ -231,6 +258,8 @@ object VaultHelper extends StrictLogging {
     val request = GetCallerIdentityRequest.builder()
       .overrideConfiguration(configuration)
       .build()
+
+    client.getSessionToken
 
     val response = client.getCallerIdentity(request)
     logger.info("aws getDynamicHeaders - headers :: %s".format(response.sdkHttpResponse().headers()))
