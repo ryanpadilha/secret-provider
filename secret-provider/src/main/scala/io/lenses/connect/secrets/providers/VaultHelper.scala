@@ -21,7 +21,7 @@ import io.lenses.connect.secrets.utils.EncodingAndId
 import io.lenses.connect.secrets.utils.ExceptionUtils.failWithEx
 import org.apache.kafka.connect.errors.ConnectException
 import play.api.libs.json.Json
-import software.amazon.awssdk.auth.credentials.{AwsCredentials, AwsCredentialsProvider, DefaultCredentialsProvider}
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.signer.AwsSignerExecutionAttribute
 import software.amazon.awssdk.authcrt.signer.AwsCrtS3V4aSigner
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration
@@ -218,8 +218,8 @@ object VaultHelper extends StrictLogging {
   }
 
   // request STS for header
-  private def getDynamicHeaderHttp(serverId: String): String = {
-    logger.info("invoke getDynamicHeadersHttp")
+  private def getDynamicHeaders(serverId: String): String = {
+    logger.info("invoke getDynamicHeaders")
 
     val request = SdkHttpFullRequest.builder()
       .method(SdkHttpMethod.POST)
@@ -237,11 +237,16 @@ object VaultHelper extends StrictLogging {
 
     val signer = AwsCrtS3V4aSigner.builder.defaultRegionScope(RegionScope.GLOBAL).build()
     val headers = signer.sign(request, ea).headers
+    logger.info("aws getDynamicHeaders - headers :: %s".format(headers))
 
-    ""
+    val payload = Json.toJson(headersToMap(headers).asScala).toString()
+    val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
+    logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
+
+    base64Headers
   }
 
-  private def getDynamicHeaders(serverId: String): String = {
+  private def getDynamicHeadersAccount(serverId: String): String = {
     logger.info("invoke getDynamicHeaders")
 
     val credentialsProvider = DefaultCredentialsProvider.create()
