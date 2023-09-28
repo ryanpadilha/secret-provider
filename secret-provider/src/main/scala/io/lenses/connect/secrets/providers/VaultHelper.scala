@@ -226,8 +226,7 @@ object VaultHelper extends StrictLogging {
     val param = new util.ArrayList[String]()
     param.add(serverId)
 
-    val configuration = AwsRequestOverrideConfiguration.builder().build()
-    configuration.headers().put("X-Vault-AWS-IAM-Server-ID", param)
+    val configuration = AwsRequestOverrideConfiguration.builder().putHeader("X-Vault-AWS-IAM-Server-ID", param).build()
 
     val request = GetCallerIdentityRequest.builder()
       .overrideConfiguration(configuration)
