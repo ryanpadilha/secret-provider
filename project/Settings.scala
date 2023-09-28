@@ -15,7 +15,7 @@ object Settings extends Dependencies {
   val scala213 = "2.13.10"
   val scala3   = "3.2.2"
 
-  val nextVersion = "2.1.9"
+  val nextVersion = "2.1.12"
   val artifactVersion = {
     sys.env.get("LENSES_TAG_NAME") match {
       case Some(tag) => tag

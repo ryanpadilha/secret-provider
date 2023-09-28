@@ -10,7 +10,7 @@ import io.github.jopenlibs.vault.Vault
 import io.lenses.connect.secrets.async.AsyncFunctionLoop
 import io.lenses.connect.secrets.config.VaultProviderConfig
 import io.lenses.connect.secrets.config.VaultSettings
-import io.lenses.connect.secrets.providers.VaultHelper.createClient
+import io.lenses.connect.secrets.providers.VaultHelper.{createClient, getAuthToken}
 import org.apache.kafka.common.config.ConfigData
 import org.apache.kafka.common.config.provider.ConfigProvider
 import org.apache.kafka.connect.errors.ConnectException
@@ -21,9 +21,10 @@ import java.util
 class VaultSecretProvider() extends ConfigProvider {
   private implicit val clock: Clock = Clock.systemDefaultZone()
 
-  private var maybeVaultClient: Option[Vault]             = None
-  private var tokenRenewal:     Option[AsyncFunctionLoop] = None
-  private var secretProvider:   Option[SecretProvider]    = None
+  private var maybeVaultClient:   Option[Vault]             = None
+  private var tokenRenewal:       Option[AsyncFunctionLoop] = None
+  private var tokenRenewalHeader: Option[AsyncFunctionLoop] = None
+  private var secretProvider:     Option[SecretProvider]    = None
 
   def getClient: Option[Vault] = maybeVaultClient
 
@@ -40,7 +41,20 @@ class VaultSecretProvider() extends ConfigProvider {
 
     secretProvider   = Some(new SecretProvider(getClass.getSimpleName, helper.lookup))
     maybeVaultClient = Some(vaultClient)
+
     createRenewalLoop(settings)
+    createRenewalHeadersLoop(vaultClient, settings)
+  }
+
+  private def createRenewalHeadersLoop(vaultClient: Vault, settings: VaultSettings): Unit = {
+    val renewalLoop = {
+      new AsyncFunctionLoop(settings.tokenRenewal, "AWS Token Header Renewal")(
+        getAuthToken(vaultClient, settings),
+      )
+    }
+
+    tokenRenewalHeader = Some(renewalLoop)
+    renewalLoop.start()
   }
 
   private def createRenewalLoop(settings: VaultSettings): Unit = {
@@ -49,6 +63,7 @@ class VaultSecretProvider() extends ConfigProvider {
         renewToken(),
       )
     }
+
     tokenRenewal = Some(renewalLoop)
     renewalLoop.start()
   }
