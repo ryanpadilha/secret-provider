@@ -21,16 +21,12 @@ import io.lenses.connect.secrets.utils.EncodingAndId
 import io.lenses.connect.secrets.utils.ExceptionUtils.failWithEx
 import org.apache.kafka.connect.errors.ConnectException
 import play.api.libs.json.Json
-import software.amazon.awssdk.auth.credentials.{DefaultCredentialsProvider, EnvironmentVariableCredentialsProvider}
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.signer.AwsSignerExecutionAttribute
-import software.amazon.awssdk.authcrt.signer.AwsCrtS3V4aSigner
 import software.amazon.awssdk.authcrt.signer.internal.DefaultAwsCrtV4aSigner
-import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration
 import software.amazon.awssdk.core.interceptor.ExecutionAttributes
 import software.amazon.awssdk.http.{SdkHttpFullRequest, SdkHttpMethod}
 import software.amazon.awssdk.regions.{Region, RegionScope}
-import software.amazon.awssdk.services.sts.StsClient
-import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest
 
 import java.io.File
 import java.nio.charset.StandardCharsets
