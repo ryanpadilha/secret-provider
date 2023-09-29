@@ -23,13 +23,10 @@ import org.apache.kafka.connect.errors.ConnectException
 import play.api.libs.json.Json
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.signer.AwsSignerExecutionAttribute
-import software.amazon.awssdk.authcrt.signer.AwsCrtS3V4aSigner
-import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration
+import software.amazon.awssdk.authcrt.signer.internal.DefaultAwsCrtV4aSigner
 import software.amazon.awssdk.core.interceptor.ExecutionAttributes
 import software.amazon.awssdk.http.{SdkHttpFullRequest, SdkHttpMethod}
 import software.amazon.awssdk.regions.{Region, RegionScope}
-import software.amazon.awssdk.services.sts.StsClient
-import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest
 
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -228,48 +225,18 @@ object VaultHelper extends StrictLogging {
       .protocol("https")
       .host("sts.amazonaws.com")
       .putHeader("X-Vault-AWS-IAM-Server-ID", new util.ArrayList[String](){ add(serverId) })
-      .putHeader("Content-Type", new util.ArrayList[String](){ add("application/x-www-form-urlencoded; charset=utf-8")  })
+      .putHeader("Content-Type", new util.ArrayList[String](){ add("application/x-www-form-urlencoded; charset=utf-8") })
       .build()
 
     val ea = new ExecutionAttributes()
-    ea.putAttribute(AwsSignerExecutionAttribute.AWS_CREDENTIALS,  DefaultCredentialsProvider.create().resolveCredentials())
+    ea.putAttribute(AwsSignerExecutionAttribute.AWS_CREDENTIALS, DefaultCredentialsProvider.create().resolveCredentials())
     ea.putAttribute(AwsSignerExecutionAttribute.SERVICE_SIGNING_NAME, "GetCallerIdentity")
 
-    val signer = AwsCrtS3V4aSigner.builder.defaultRegionScope(RegionScope.GLOBAL).build()
+    val signer = DefaultAwsCrtV4aSigner.builder.defaultRegionScope(RegionScope.create(Region.US_EAST_1.toString)).build()
     val headers = signer.sign(request, ea).headers
     logger.info("aws getDynamicHeaders - headers :: %s".format(headers))
 
     val payload = Json.toJson(headersToMap(headers).asScala).toString()
-    val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
-    logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
-
-    base64Headers
-  }
-
-  private def getDynamicHeadersAccount(serverId: String): String = {
-    logger.info("invoke getDynamicHeaders")
-
-    val credentialsProvider = DefaultCredentialsProvider.create()
-    val client = StsClient.builder()
-      .region(Region.SA_EAST_1)
-      .credentialsProvider(credentialsProvider)
-      .build()
-
-    val param = new util.ArrayList[String]()
-    param.add(serverId)
-
-    val configuration = AwsRequestOverrideConfiguration.builder().putHeader("X-Vault-AWS-IAM-Server-ID", param).build()
-
-    val request = GetCallerIdentityRequest.builder()
-      .overrideConfiguration(configuration)
-      .build()
-
-    client.getSessionToken
-
-    val response = client.getCallerIdentity(request)
-    logger.info("aws getDynamicHeaders - headers :: %s".format(response.sdkHttpResponse().headers()))
-
-    val payload = Json.toJson(headersToMap(response.sdkHttpResponse().headers()).asScala).toString()
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
     logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
