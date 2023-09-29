@@ -279,9 +279,7 @@ object VaultHelper extends StrictLogging {
   private def headersToMap(headers: util.Map[String, util.List[String]]): util.Map[String, String] = {
     val headerMap = new util.HashMap[String, String]()
     for ((key, value) <- headers.asScala) {
-      val values = new util.ArrayList[String]()
-      values.add(value.toString)
-      headerMap.put(key, Json.toJson(values.asScala).toString())
+      headerMap.put(key, value.get(0))
     }
     headerMap
   }
