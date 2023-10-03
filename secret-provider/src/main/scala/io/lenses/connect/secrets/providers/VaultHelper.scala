@@ -237,6 +237,8 @@ object VaultHelper extends StrictLogging {
     logger.info("aws getDynamicHeaders - headers :: %s".format(headers))
 
     val payload = Json.toJson(headersToMap(headers).asScala).toString()
+    logger.info("aws getDynamicHeaders - payload :: %s".format(payload))
+
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
     logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
@@ -246,6 +248,8 @@ object VaultHelper extends StrictLogging {
   private def headersToMap(headers: util.Map[String, util.List[String]]): util.Map[String, String] = {
     val headerMap = new util.HashMap[String, String]()
     val onlyAccepted = headers.asScala.-("X-Amz-Region-Set")
+    val replaced = onlyAccepted("Authorization").get(0).replace("x-amz-region-set;", "")
+    onlyAccepted("Authorization") = new util.ArrayList[String]() { add(replaced) }
 
     for ((key, value) <- onlyAccepted) {
       headerMap.put(key, value.get(0))
