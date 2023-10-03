@@ -245,9 +245,9 @@ object VaultHelper extends StrictLogging {
 
   private def headersToMap(headers: util.Map[String, util.List[String]]): util.Map[String, String] = {
     val headerMap = new util.HashMap[String, String]()
-    headers.remove("X-Amz-Region-Set")
+    val onlyAccepted = headers.asScala.-("X-Amz-Region-Set")
 
-    for ((key, value) <- headers.asScala) {
+    for ((key, value) <- onlyAccepted) {
       headerMap.put(key, value.get(0))
     }
     headerMap
