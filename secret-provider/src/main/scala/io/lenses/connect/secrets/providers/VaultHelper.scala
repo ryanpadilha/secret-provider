@@ -6,6 +6,9 @@
 
 package io.lenses.connect.secrets.providers
 
+import com.amazonaws.DefaultRequest
+import com.amazonaws.auth.{AWS4Signer, DefaultAWSCredentialsProviderChain}
+import com.amazonaws.http.HttpMethodName
 import io.github.jopenlibs.vault.SslConfig
 import io.github.jopenlibs.vault.Vault
 import io.github.jopenlibs.vault.VaultConfig
@@ -21,14 +24,10 @@ import io.lenses.connect.secrets.utils.EncodingAndId
 import io.lenses.connect.secrets.utils.ExceptionUtils.failWithEx
 import org.apache.kafka.connect.errors.ConnectException
 import play.api.libs.json.Json
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
-import software.amazon.awssdk.auth.signer.AwsSignerExecutionAttribute
-import software.amazon.awssdk.authcrt.signer.internal.DefaultAwsCrtV4aSigner
-import software.amazon.awssdk.core.interceptor.ExecutionAttributes
-import software.amazon.awssdk.http.{SdkHttpFullRequest, SdkHttpMethod}
-import software.amazon.awssdk.regions.{Region, RegionScope}
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.utils.BinaryUtils
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Duration
@@ -36,8 +35,7 @@ import java.time.temporal.ChronoUnit
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import software.amazon.awssdk.utils.BinaryUtils
-
+import java.net.URI
 import java.util
 import scala.jdk.CollectionConverters._
 
@@ -218,25 +216,32 @@ object VaultHelper extends StrictLogging {
   private def getDynamicHeaders(serverId: String): String = {
     logger.info("invoke getDynamicHeaders")
 
-    val request = SdkHttpFullRequest.builder()
-      .method(SdkHttpMethod.POST)
-      .encodedPath("/")
-      .port(443)
-      .protocol("https")
-      .host("sts.amazonaws.com")
-      .putHeader("X-Vault-AWS-IAM-Server-ID", new util.ArrayList[String](){ add(serverId) })
-      .putHeader("Content-Type", new util.ArrayList[String](){ add("application/x-www-form-urlencoded; charset=utf-8") })
-      .build()
+    val region = Region.US_EAST_1.toString
+    val credentialsProvider = new DefaultAWSCredentialsProviderChain().getCredentials
+    val endpoint = "https://sts.amazonaws.com"
+    val body = "Action=GetCallerIdentity&Version=2011-06-15"
+    val serviceName = "sts"
 
-    val ea = new ExecutionAttributes()
-    ea.putAttribute(AwsSignerExecutionAttribute.AWS_CREDENTIALS, DefaultCredentialsProvider.create().resolveCredentials())
-    ea.putAttribute(AwsSignerExecutionAttribute.SERVICE_SIGNING_NAME, "GetCallerIdentity")
+    val headers = new util.HashMap[String, String]()
+    headers.put("X-Vault-AWS-IAM-Server-ID", serverId)
+    headers.put("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 
-    val signer = DefaultAwsCrtV4aSigner.builder.defaultRegionScope(RegionScope.create(Region.US_EAST_1.toString)).build()
-    val headers = signer.sign(request, ea).headers
-    logger.info("aws getDynamicHeaders - headers :: %s".format(headers))
+    val defaultRequest = new DefaultRequest(serviceName)
+    defaultRequest.setContent(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)))
+    defaultRequest.setHeaders(headers)
+    defaultRequest.setHttpMethod(HttpMethodName.POST)
+    defaultRequest.setEndpoint(new URI(endpoint))
 
-    val payload = Json.toJson(headersToMap(headers).asScala).toString()
+    val signer = new AWS4Signer()
+    signer.setServiceName(defaultRequest.getServiceName)
+    signer.setRegionName(region)
+    signer.sign(defaultRequest, credentialsProvider)
+
+    val signedHeaders = new util.HashMap[String, String]()
+    defaultRequest.getHeaders.asScala.map(entry => signedHeaders.put(entry._1, entry._2))
+    logger.info("aws getDynamicHeaders - signedHeaders :: %s".format(signedHeaders))
+
+    val payload = Json.toJson(signedHeaders.asScala).toString()
     logger.info("aws getDynamicHeaders - payload :: %s".format(payload))
 
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
@@ -247,11 +252,7 @@ object VaultHelper extends StrictLogging {
 
   private def headersToMap(headers: util.Map[String, util.List[String]]): util.Map[String, String] = {
     val headerMap = new util.HashMap[String, String]()
-    val onlyAccepted = headers.asScala.-("X-Amz-Region-Set")
-    val replaced = onlyAccepted("Authorization").get(0).replace("x-amz-region-set;", "")
-    onlyAccepted("Authorization") = new util.ArrayList[String]() { add(replaced) }
-
-    for ((key, value) <- onlyAccepted) {
+    for ((key, value) <- headers.asScala) {
       headerMap.put(key, value.get(0))
     }
     headerMap

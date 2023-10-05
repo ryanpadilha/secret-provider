@@ -15,6 +15,7 @@ trait Dependencies {
     val azureIdentityVersion = "1.8.1"
 
     val awsSdkV2Version = "2.20.26"
+    val awsSdkCoreVersion = "1.12.562"
 
     //test
     val scalaTestVersion = "3.2.15"
@@ -47,10 +48,9 @@ trait Dependencies {
       "com.azure" % "azure-security-keyvault-secrets" % azureKeyVaultVersion
     val `azure-identity` = "com.azure" % "azure-identity" % azureIdentityVersion
 
-    lazy val awsSecretsManagerSdkV2 = "software.amazon.awssdk" % "secretsmanager" % awsSdkV2Version
-    lazy val awsIamSdkV2            = "software.amazon.awssdk" % "iam"            % awsSdkV2Version
-    lazy val awsStsSdkV2            = "software.amazon.awssdk" % "sts"            % awsSdkV2Version
-    lazy val awsAuthCrtSdkV2        = "software.amazon.awssdk" % "auth-crt"       % awsSdkV2Version
+    lazy val awsSecretsManagerSdkV2 = "software.amazon.awssdk" % "secretsmanager"     % awsSdkV2Version
+    lazy val awsIamSdkV2            = "software.amazon.awssdk" % "iam"                % awsSdkV2Version
+    lazy val awsCoreSdkV2           = "com.amazonaws"          % "aws-java-sdk-core"  % awsSdkCoreVersion
 
     val `mockito`      = "org.scalatestplus"   %% "mockito-4-6"  % mockitoVersion
     val `scalatest`    = "org.scalatest"       %% "scalatest"    % scalaTestVersion
@@ -88,9 +88,8 @@ trait Dependencies {
     `azure-key-vault`,
     `azure-identity` exclude ("javax.activation", "activation"),
     `awsSecretsManagerSdkV2`,
-    `awsStsSdkV2`,
+    `awsCoreSdkV2`,
     `play-json`,
-    `awsAuthCrtSdkV2`,
     awsIamSdkV2           % IntegrationTest,
     `jakartaServlet`      % Test,
     `mockito`             % Test,
