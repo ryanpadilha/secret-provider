@@ -10,7 +10,7 @@ import io.github.jopenlibs.vault.Vault
 import io.lenses.connect.secrets.async.AsyncFunctionLoop
 import io.lenses.connect.secrets.config.VaultProviderConfig
 import io.lenses.connect.secrets.config.VaultSettings
-import io.lenses.connect.secrets.providers.VaultHelper.{createClient, getAuthToken}
+import io.lenses.connect.secrets.providers.VaultHelper.createClient
 import org.apache.kafka.common.config.ConfigData
 import org.apache.kafka.common.config.provider.ConfigProvider
 import org.apache.kafka.connect.errors.ConnectException
@@ -23,7 +23,6 @@ class VaultSecretProvider() extends ConfigProvider {
 
   private var maybeVaultClient:   Option[Vault]             = None
   private var tokenRenewal:       Option[AsyncFunctionLoop] = None
-  private var tokenRenewalHeader: Option[AsyncFunctionLoop] = None
   private var secretProvider:     Option[SecretProvider]    = None
 
   def getClient: Option[Vault] = maybeVaultClient
@@ -32,35 +31,24 @@ class VaultSecretProvider() extends ConfigProvider {
   override def configure(configs: util.Map[String, _]): Unit = {
     val settings    = VaultSettings(VaultProviderConfig(configs))
     val vaultClient = createClient(settings)
+    maybeVaultClient = Some(vaultClient)
 
     val helper = new VaultHelper(
-      vaultClient,
+      maybeVaultClient.get,
       settings.defaultTtl,
       fileWriterCreateFn = () => settings.fileWriterOpts.map(_.createFileWriter()),
     )
 
-    secretProvider   = Some(new SecretProvider(getClass.getSimpleName, helper.lookup))
-    maybeVaultClient = Some(vaultClient)
+    secretProvider = Some(new SecretProvider(getClass.getSimpleName, helper.lookup))
 
-    createRenewalLoop(settings)
-    createRenewalHeadersLoop(vaultClient, settings)
+    createRenewalHeadersLoop(settings)
+//    createRenewalLoop(settings)
   }
 
-  private def createRenewalHeadersLoop(vaultClient: Vault, settings: VaultSettings): Unit = {
+  private def createRenewalHeadersLoop(settings: VaultSettings): Unit = {
     val renewalLoop = {
       new AsyncFunctionLoop(settings.tokenRenewal, "AWS Token Header Renewal")(
-        getAuthToken(vaultClient, settings),
-      )
-    }
-
-    tokenRenewalHeader = Some(renewalLoop)
-    renewalLoop.start()
-  }
-
-  private def createRenewalLoop(settings: VaultSettings): Unit = {
-    val renewalLoop = {
-      new AsyncFunctionLoop(settings.tokenRenewal, "Vault Token Renewal")(
-        renewToken(),
+        renewAwsToken(settings)
       )
     }
 
@@ -68,11 +56,27 @@ class VaultSecretProvider() extends ConfigProvider {
     renewalLoop.start()
   }
 
+//  private def createRenewalLoop(settings: VaultSettings): Unit = {
+//    val renewalLoop = {
+//      new AsyncFunctionLoop(settings.tokenRenewal, "Vault Token Renewal")(
+//        renewToken()
+//      )
+//    }
+//
+//    tokenRenewal = Some(renewalLoop)
+//    renewalLoop.start()
+//  }
+
   def tokenRenewalSuccess: Long = tokenRenewal.map(_.successRate).getOrElse(-1)
   def tokenRenewalFailure: Long = tokenRenewal.map(_.failureRate).getOrElse(-1)
 
-  private def renewToken(): Unit =
+//  private def renewToken(): Unit =
+//    maybeVaultClient.foreach(client => client.auth().renewSelf())
+
+  private def renewAwsToken(settings: VaultSettings): Unit = {
+    maybeVaultClient = Some(createClient(settings))
     maybeVaultClient.foreach(client => client.auth().renewSelf())
+  }
 
   override def close(): Unit =
     tokenRenewal.foreach(_.close())

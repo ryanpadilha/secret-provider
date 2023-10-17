@@ -117,7 +117,7 @@ object VaultHelper extends StrictLogging {
     new Vault(config)
   }
 
-  def getAuthToken(vault: Vault, settings: VaultSettings): Option[String] = {
+  private def getAuthToken(vault: Vault, settings: VaultSettings): Option[String] = {
     val token = settings.authMode match {
       case VaultAuthMethod.USERPASS =>
         settings.userPass
@@ -248,14 +248,6 @@ object VaultHelper extends StrictLogging {
     logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
     base64Headers
-  }
-
-  private def headersToMap(headers: util.Map[String, util.List[String]]): util.Map[String, String] = {
-    val headerMap = new util.HashMap[String, String]()
-    for ((key, value) <- headers.asScala) {
-      headerMap.put(key, value.get(0))
-    }
-    headerMap
   }
 
   // set up tls
