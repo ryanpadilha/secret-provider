@@ -113,8 +113,7 @@ object VaultHelper extends StrictLogging {
     )
 
     config.token(getAuthToken(vault, settings).get)
-    config.build()
-    new Vault(config)
+    new Vault(config.build())
   }
 
   private def getAuthToken(vault: Vault, settings: VaultSettings): Option[String] = {
@@ -150,7 +149,7 @@ object VaultHelper extends StrictLogging {
                 aws.role,
                 aws.url,
                 aws.body.value(),
-                getDynamicHeaders(aws.iamServerId.getOrElse(settings.addr)),
+                getDynamicHeader(aws.iamServerId.getOrElse(settings.addr)),
                 aws.mount,
               )
               .getAuthClientToken,
@@ -212,30 +211,22 @@ object VaultHelper extends StrictLogging {
     token
   }
 
-  // request STS for header
-  private def getDynamicHeaders(serverId: String): String = {
-    logger.info("invoke aws getDynamicHeaders")
-
-    val region = Region.US_EAST_1.toString
-    val credentialsProvider = new DefaultAWSCredentialsProviderChain().getCredentials
-    val endpoint = "https://sts.amazonaws.com"
-    val body = "Action=GetCallerIdentity&Version=2011-06-15"
-    val serviceName = "sts"
-
+  // request STS for authenticated header
+  private def getDynamicHeader(serverId: String): String = {
     val headers = new util.HashMap[String, String]()
     headers.put("X-Vault-AWS-IAM-Server-ID", serverId)
     headers.put("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 
-    val defaultRequest = new DefaultRequest(serviceName)
-    defaultRequest.setContent(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)))
+    val defaultRequest = new DefaultRequest("sts")
+    defaultRequest.setContent(new ByteArrayInputStream("Action=GetCallerIdentity&Version=2011-06-15".getBytes(StandardCharsets.UTF_8)))
     defaultRequest.setHeaders(headers)
     defaultRequest.setHttpMethod(HttpMethodName.POST)
-    defaultRequest.setEndpoint(new URI(endpoint))
+    defaultRequest.setEndpoint(new URI("https://sts.amazonaws.com"))
 
     val signer = new AWS4Signer()
     signer.setServiceName(defaultRequest.getServiceName)
-    signer.setRegionName(region)
-    signer.sign(defaultRequest, credentialsProvider)
+    signer.setRegionName(Region.US_EAST_1.toString)
+    signer.sign(defaultRequest, new DefaultAWSCredentialsProviderChain().getCredentials)
 
     val signedHeaders = new util.HashMap[String, String]()
     defaultRequest.getHeaders.asScala.map(entry => signedHeaders.put(entry._1, entry._2))
