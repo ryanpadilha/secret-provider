@@ -14,11 +14,12 @@ import io.lenses.connect.secrets.providers.VaultHelper.createClient
 import org.apache.kafka.common.config.ConfigData
 import org.apache.kafka.common.config.provider.ConfigProvider
 import org.apache.kafka.connect.errors.ConnectException
+import com.typesafe.scalalogging.LazyLogging
 
 import java.time.Clock
 import java.util
 
-class VaultSecretProvider() extends ConfigProvider {
+class VaultSecretProvider() extends ConfigProvider with LazyLogging {
   private implicit val clock: Clock = Clock.systemDefaultZone()
 
   private var maybeVaultClient:   Option[Vault]             = None
@@ -41,40 +42,45 @@ class VaultSecretProvider() extends ConfigProvider {
 
     secretProvider = Some(new SecretProvider(getClass.getSimpleName, helper.lookup))
 
+    createRenewalLoop(settings)
     createRenewalHeadersLoop(settings)
-//    createRenewalLoop(settings)
   }
 
   private def createRenewalHeadersLoop(settings: VaultSettings): Unit = {
     val renewalLoop = {
-      new AsyncFunctionLoop(settings.tokenRenewal, "AWS Token Header Renewal")(
+      new AsyncFunctionLoop(settings.tokenRenewal, "AWS STS Header Renewal")(
         renewAwsToken(settings)
       )
     }
 
     tokenRenewal = Some(renewalLoop)
+    logger.info("createRenewalHeadersLoop start")
     renewalLoop.start()
   }
 
-//  private def createRenewalLoop(settings: VaultSettings): Unit = {
-//    val renewalLoop = {
-//      new AsyncFunctionLoop(settings.tokenRenewal, "Vault Token Renewal")(
-//        renewToken()
-//      )
-//    }
-//
-//    tokenRenewal = Some(renewalLoop)
-//    renewalLoop.start()
-//  }
+  private def createRenewalLoop(settings: VaultSettings): Unit = {
+    val renewalLoop = {
+      new AsyncFunctionLoop(settings.tokenRenewal, "Vault Token Renewal")(
+        renewToken()
+      )
+    }
+
+    tokenRenewal = Some(renewalLoop)
+    logger.info("createRenewalLoop start")
+    renewalLoop.start()
+  }
 
   def tokenRenewalSuccess: Long = tokenRenewal.map(_.successRate).getOrElse(-1)
   def tokenRenewalFailure: Long = tokenRenewal.map(_.failureRate).getOrElse(-1)
 
-//  private def renewToken(): Unit =
-//    maybeVaultClient.foreach(client => client.auth().renewSelf())
+  private def renewToken(): Unit = {
+    maybeVaultClient.foreach(client => client.auth().renewSelf())
+    logger.info("renewToken :: renewSelf")
+  }
 
   private def renewAwsToken(settings: VaultSettings): Unit = {
     maybeVaultClient = Some(createClient(settings))
+    logger.info("renewAwsToken - maybeVaultClient")
     //maybeVaultClient.foreach(client => client.auth().renewSelf())
   }
 

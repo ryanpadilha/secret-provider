@@ -214,7 +214,7 @@ object VaultHelper extends StrictLogging {
 
   // request STS for header
   private def getDynamicHeaders(serverId: String): String = {
-    logger.info("invoke getDynamicHeaders")
+    logger.info("invoke aws getDynamicHeaders")
 
     val region = Region.US_EAST_1.toString
     val credentialsProvider = new DefaultAWSCredentialsProviderChain().getCredentials
