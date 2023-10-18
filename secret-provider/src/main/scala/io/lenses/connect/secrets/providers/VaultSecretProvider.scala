@@ -24,14 +24,21 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
 
   private var maybeVaultClient:   Option[Vault]             = None
   private var tokenRenewal:       Option[AsyncFunctionLoop] = None
-  private var tokenRenewalAws:    Option[AsyncFunctionLoop] = None
+  private var tokenRenewalHeader: Option[AsyncFunctionLoop] = None
   private var secretProvider:     Option[SecretProvider]    = None
 
   def getClient: Option[Vault] = maybeVaultClient
 
   // configure the vault client
   override def configure(configs: util.Map[String, _]): Unit = {
-    val settings    = VaultSettings(VaultProviderConfig(configs))
+    val settings = VaultSettings(VaultProviderConfig(configs))
+
+    createSecretProvider(settings)
+    createRenewalLoop(settings)
+    createRenewalHeadersLoop(settings)
+  }
+
+  private def createSecretProvider(settings: VaultSettings): Unit = {
     val vaultClient = createClient(settings)
     maybeVaultClient = Some(vaultClient)
 
@@ -42,9 +49,6 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
     )
 
     secretProvider = Some(new SecretProvider(getClass.getSimpleName, helper.lookup))
-
-    createRenewalLoop(settings)
-    createRenewalHeadersLoop(settings)
   }
 
   private def createRenewalHeadersLoop(settings: VaultSettings): Unit = {
@@ -54,8 +58,7 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
       )
     }
 
-    tokenRenewalAws = Some(renewalLoop)
-    logger.info("createRenewalHeadersLoop start")
+    tokenRenewalHeader = Some(renewalLoop)
     renewalLoop.start()
   }
 
@@ -67,15 +70,11 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
     }
 
     tokenRenewal = Some(renewalLoop)
-    logger.info("createRenewalLoop start")
     renewalLoop.start()
   }
 
   def tokenRenewalSuccess: Long = tokenRenewal.map(_.successRate).getOrElse(-1)
   def tokenRenewalFailure: Long = tokenRenewal.map(_.failureRate).getOrElse(-1)
-
-  def tokenRenewalSuccessAws: Long = tokenRenewalAws.map(_.successRate).getOrElse(-1)
-  def tokenRenewalFailureAws: Long = tokenRenewalAws.map(_.failureRate).getOrElse(-1)
 
   private def renewToken(): Unit = {
     maybeVaultClient.foreach(client => client.auth().renewSelf())
@@ -83,20 +82,13 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
   }
 
   private def renewAwsToken(settings: VaultSettings): Unit = {
-    maybeVaultClient = Some(createClient(settings))
-    val helper = new VaultHelper(
-      maybeVaultClient.get,
-      settings.defaultTtl,
-      fileWriterCreateFn = () => settings.fileWriterOpts.map(_.createFileWriter()),
-    )
-
-    secretProvider = Some(new SecretProvider(getClass.getSimpleName, helper.lookup))
-    logger.info("renewAwsToken :: maybeVaultClient")
+    createSecretProvider(settings)
+    logger.info("renewAwsToken :: createSecretProvider")
   }
 
   override def close(): Unit = {
     tokenRenewal.foreach(_.close())
-    tokenRenewalAws.foreach(_.close())
+    tokenRenewalHeader.foreach(_.close())
   }
 
   override def get(path: String): ConfigData =
