@@ -75,7 +75,7 @@ class VaultSecretProvider() extends ConfigProvider {
 
   private def renewAwsToken(settings: VaultSettings): Unit = {
     maybeVaultClient = Some(createClient(settings))
-    maybeVaultClient.foreach(client => client.auth().renewSelf())
+    //maybeVaultClient.foreach(client => client.auth().renewSelf())
   }
 
   override def close(): Unit =

@@ -239,11 +239,8 @@ object VaultHelper extends StrictLogging {
 
     val signedHeaders = new util.HashMap[String, String]()
     defaultRequest.getHeaders.asScala.map(entry => signedHeaders.put(entry._1, entry._2))
-    logger.info("aws getDynamicHeaders - signedHeaders :: %s".format(signedHeaders))
 
     val payload = Json.toJson(signedHeaders.asScala).toString()
-    logger.info("aws getDynamicHeaders - payload :: %s".format(payload))
-
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
     logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
