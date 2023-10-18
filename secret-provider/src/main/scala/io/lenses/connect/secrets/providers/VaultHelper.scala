@@ -117,7 +117,7 @@ object VaultHelper extends StrictLogging {
     new Vault(config)
   }
 
-  def getAuthToken(vault: Vault, settings: VaultSettings): Option[String] = {
+  private def getAuthToken(vault: Vault, settings: VaultSettings): Option[String] = {
     val token = settings.authMode match {
       case VaultAuthMethod.USERPASS =>
         settings.userPass
@@ -214,7 +214,7 @@ object VaultHelper extends StrictLogging {
 
   // request STS for header
   private def getDynamicHeaders(serverId: String): String = {
-    logger.info("invoke getDynamicHeaders")
+    logger.info("invoke aws getDynamicHeaders")
 
     val region = Region.US_EAST_1.toString
     val credentialsProvider = new DefaultAWSCredentialsProviderChain().getCredentials
@@ -239,23 +239,12 @@ object VaultHelper extends StrictLogging {
 
     val signedHeaders = new util.HashMap[String, String]()
     defaultRequest.getHeaders.asScala.map(entry => signedHeaders.put(entry._1, entry._2))
-    logger.info("aws getDynamicHeaders - signedHeaders :: %s".format(signedHeaders))
 
     val payload = Json.toJson(signedHeaders.asScala).toString()
-    logger.info("aws getDynamicHeaders - payload :: %s".format(payload))
-
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
     logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
     base64Headers
-  }
-
-  private def headersToMap(headers: util.Map[String, util.List[String]]): util.Map[String, String] = {
-    val headerMap = new util.HashMap[String, String]()
-    for ((key, value) <- headers.asScala) {
-      headerMap.put(key, value.get(0))
-    }
-    headerMap
   }
 
   // set up tls
