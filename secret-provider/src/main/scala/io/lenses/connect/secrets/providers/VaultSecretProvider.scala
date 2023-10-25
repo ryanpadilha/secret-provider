@@ -53,7 +53,7 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
 
   private def createRenewalHeaderLoop(settings: VaultSettings): Unit = {
     val renewalLoop = {
-      new AsyncFunctionLoop(settings.tokenRenewal, "AWS STS Header Renewal")(
+      new AsyncFunctionLoop(settings.tokenRenewal, "Vault Header Renewal")(
         renewHeaderToken(settings)
       )
     }
@@ -83,7 +83,7 @@ class VaultSecretProvider() extends ConfigProvider with LazyLogging {
 
   private def renewHeaderToken(settings: VaultSettings): Unit = {
     createSecretProvider(settings)
-    logger.info("renewAwsToken :: createSecretProvider")
+    logger.info("renewToken :: secretProvider")
   }
 
   override def close(): Unit = {

@@ -233,7 +233,7 @@ object VaultHelper extends StrictLogging {
 
     val payload = Json.toJson(signedHeaders.asScala).toString()
     val base64Headers = BinaryUtils.toBase64(payload.getBytes(StandardCharsets.UTF_8))
-    logger.info("base64header aws getDynamicHeaders :: %s".format(base64Headers))
+    logger.debug("base64header aws getDynamicHeaders :: %s".format(base64Headers))
 
     base64Headers
   }
